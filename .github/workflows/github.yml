@@ -1,49 +1,44 @@
-name: "WeebZone: Deploy to Actions"
+name: MirrorBot Environment
 
 on:
   push:
   workflow_dispatch:
-    
+   
+
 jobs:
-  build:
+  mirror:
     runs-on: ubuntu-latest
+
     steps:
-       - name: "Checkout WeebZone"
-         uses: actions/checkout@main
-       
-       - name: "Cancel Duplicate Runs"
-         uses: styfle/cancel-workflow-action@0.9.0
-         with:
-            all_but_latest: true
-            access_token: ${{ github.token }}
-       - name: "Initialize WeebZone"
-         continue-on-error: true
-         run: |
-           git config --global user.name ${{ secrets.GIT_NAME }}
-           git config --global user.email ${{ secrets.GIT_EMAIL }}
-           git config --global credential.helper store
-           echo "https://${{ secrets.GIT_NAME }}:${{ secrets.GIT_TOKEN }}@github.com" > ~/.git-credentials
-       
-       # Cleanup The Actions Workspace Using Custom Composite Run Actions
-       - uses: rokibhasansagar/slimhub_actions@main
-       
-       - name: "Clone Repository"
-         continue-on-error: true
-         run: |
-           git clone https://${{ secrets.GIT_NAME }}:${{ secrets.GIT_TOKEN }}@${{ secrets.BOT_REPO }} weebzone
-       - name: "Running WeebZone"
-         timeout-minutes: 350
-         continue-on-error: true
-         run: |
-           cd weebzone
-           docker build . -t weebzone
-           docker run --env CONFIG_FILE_URL=${{ secrets.CONFIG_FILE_URL }} weebzone
-       - name: "Re-Run WeebZone"
-         continue-on-error: true
-         run: |
-              git clone https://github.com/${GITHUB_REPOSITORY} loop
-              cd loop || exit 1
-              echo $(date -u +%T%P) >> loop.txt
-              git add loop.txt
-              git commit -m "WeebZone : Re-Run $(date -u +%D-%T%P)"
-              git push -q https://${{ secrets.GIT_TOKEN }}@github.com/${GITHUB_REPOSITORY} HEAD:heroku
+      - name: Checkout
+        uses: actions/checkout@main
+
+      - name: Cleanup workspace
+        uses: rokibhasansagar/slimhub_actions@main
+
+      - name: Set Git Configs & Secrets
+        run: |
+          git config --global user.email ${{ secrets.GHMAIL }}
+          git config --global user.name ${{ secrets.GHUSER }}
+          git config --global credential.helper store
+          echo "https://${{ secrets.GHUSER }}:${{ secrets.GH_TOKEN }}@github.com" > ~/.git-credentials
+      - name: Clone Mirror Repo
+        run: |
+          git clone https://${{ secrets.GH_TOKEN }}@github.com/${{ secrets.GHUSER }}/${{ secrets.REPO }} source
+      - name: Compile Docker
+        run: |
+          cd source  exit 1
+          docker container prune --force  true
+          docker build . --rm --force-rm --compress --no-cache=true --pull --file Dockerfile -t mirror-bot
+      - name: Run bot
+        continue-on-error: true
+        timeout-minutes: 340
+        run: |
+          docker run --privileged --rm -i mirror-bot
+      - name: Loop Workflow
+        continue-on-error: true
+        run: |
+          git clone https://${{ secrets.GH_TOKEN }}@github.com/${GITHUB_REPOSITORY} loop
+          cd loop || exit 1
+          git commit --allow-empty -m "Workflow: Loop"
+          git push -f
